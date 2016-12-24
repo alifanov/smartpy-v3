@@ -60,7 +60,8 @@ class ASTTranslator(object):
             result = [node_name, self.walk(node.left), self.walk(node.right)]
         elif node_name == 'Call':
             if node.func.attr == 'format':
-                result = ['format', node.func.value.s, [self.walk(s) for s in node.args]] # args, keywords, startargs, kwargs
+                result = ['format', node.func.value.s,
+                          [self.walk(s) for s in node.args]]  # TODO: add keywords, startargs, kwargs
         elif node_name == 'num':
             result = node.n
         elif node_name == 'list':
@@ -96,13 +97,13 @@ class ASTPatternMatcher(object):
         res = l[:1]
 
         for i in range(len(l)):
-            if l[i] == '*' and l[i+1]:
+            if l[i] == '*' and l[i + 1]:
                 shift += 1
-            if i+shift < len(l):
-                if isinstance(l[i+shift], list):
-                    res.append(self.replace_star_pairs(l[i+shift]))
+            if i + shift < len(l):
+                if isinstance(l[i + shift], list):
+                    res.append(self.replace_star_pairs(l[i + shift]))
                 else:
-                    res.append(l[i+shift])
+                    res.append(l[i + shift])
 
         return res
 
@@ -110,6 +111,30 @@ class ASTPatternMatcher(object):
         e = self.replace_all_list(e)
         e = self.replace_star_pairs(e)
         return e
+
+    def partial_compare_lists(self, l1, l2):
+        if not isinstance(l1, list) and not isinstance(l2, list):
+            return True
+
+        if isinstance(l1, list) != isinstance(l2, list):
+            return False
+
+        if len(l1) != len(l2):
+            return False
+
+        result = []
+        for e1, e2 in zip(l1, l2):
+            if isinstance(e1, list) != isinstance(e2, list):
+                return False
+            else:
+                result.append(self.partial_compare_lists(e1, e2))
+        return True if result == [] else all(result)
+
+    def check_in_list(self, el, l):
+        for ll in l:
+            if self.partial_compare_lists(el, ll):
+                return True
+        return False
 
     def get_common_expr(self, ast_list):
         # print('Expr[0]: {}'.format(ast_list[0]))
@@ -136,7 +161,7 @@ class ASTPatternMatcher(object):
                 result += [self.get_common_expr(heads)]
         # print('Result: {}'.format(result))
         if tails[0]:
-            if tails[0][0] in tails[1] and isinstance(tails[0][0], list) and tails[0][0] and len(tails[0]) != len(
+            if tails[0][0] and self.check_in_list(tails[0][0], tails[1]) and isinstance(tails[0][0], list) and len(tails[0]) != len(
                     tails[1]):
                 tails[0].insert(0, [])
         # print('Tails: {}'.format(tails))
@@ -224,9 +249,11 @@ if __name__ == "__main__":
         path = os.path.join(BASE_DIR, f)
         if os.path.isfile(path):
             code = open(path).read()
-            ast_expr = ASTGenerator(code).parsed_ast[0]
+            ast_expr = ASTGenerator(code).parsed_ast
             print('AST: ', ast_expr)
-            exprs.append(ast_expr)
+            for ae in ast_expr:
+                exprs.append(ae)
+            # exprs.append(ast_expr)
             codes.append(code)
 
     search_code = open(os.path.join('codes/search', 'source1.py')).read()
